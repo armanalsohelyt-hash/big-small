@@ -21,6 +21,7 @@ let state = {
     history: []
 };
 
+// লোকাল ফাইল থেকে আগের ডাটা লোড
 if (fs.existsSync(DATA_FILE)) {
     try {
         const saved = JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
@@ -43,25 +44,49 @@ function saveDataToDisk() {
     } catch (err) {}
 }
 
+// ব্রাউজার ইউজার-এজেন্ট হেডারসহ শক্তিশালী ডাটা ফেচিং ফাংশন
 async function fetchDkwin30S() {
-    const url = `https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json?no=0&size=50&t=${Date.now()}`;
+    const rawUrl = `https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json?no=0&size=50&t=${Date.now()}`;
+    const headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Referer': 'https://dkwin9.com/'
+    };
+
+    // ১. সরাসরি রিকোয়েস্ট
     try {
-        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-        if (!res.ok) throw new Error();
-        const json = await res.json();
-        return json?.data?.list || null;
-    } catch (e) {
-        try {
-            const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-            const res2 = await fetch(proxy);
-            const json2 = await res2.json();
-            return json2?.data?.list || null;
-        } catch {
-            return null;
+        const res = await fetch(rawUrl, { headers });
+        if (res.ok) {
+            const json = await res.json();
+            if (json?.data?.list && json.data.list.length > 0) return json.data.list;
         }
-    }
+    } catch (e) {}
+
+    // ২. ব্যাকআপ প্রক্সি ১
+    try {
+        const p1 = `https://api.allorigins.win/raw?url=${encodeURIComponent(rawUrl)}`;
+        const res = await fetch(p1);
+        if (res.ok) {
+            const json = await res.json();
+            if (json?.data?.list && json.data.list.length > 0) return json.data.list;
+        }
+    } catch (e) {}
+
+    // ৩. ব্যাকআপ প্রক্সি ২
+    try {
+        const p2 = `https://corsproxy.io/?${encodeURIComponent(rawUrl)}`;
+        const res = await fetch(p2, { headers });
+        if (res.ok) {
+            const json = await res.json();
+            if (json?.data?.list && json.data.list.length > 0) return json.data.list;
+        }
+    } catch (e) {}
+
+    return null;
 }
 
+// ডিপ কোয়ান্টাম ইঞ্জিন (Markov + EMA + Chop)
 function calculateDeepQuantum(list) {
     const numbers = list.map(x => parseInt(x.number, 10)).filter(n => !isNaN(n));
     const bits = numbers.map(n => n >= 5 ? 1 : 0);
@@ -176,6 +201,7 @@ function verifyDraw(actualIssue, actualNum) {
     state.pendingPrediction = null;
 }
 
+// ব্যাকগ্রাউন্ড ইঞ্জিন
 async function cloudBackgroundLoop() {
     try {
         const list = await fetchDkwin30S();
